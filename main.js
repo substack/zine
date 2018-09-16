@@ -94,14 +94,45 @@ regl.frame(function (context) {
   updateModels()
 })
 
+var ease = require('eases')
 var PI = Math.PI
 var states = require('./states.js')('A', {
-  A: { state: { x: 0.1, y: 0 }, t: 1, next: 'B' },
-  B: { state: { x: PI, y: 0 }, t: 1, next: 'C' },
-  C: { state: { x: PI, y: PI }, t: 1, next: 'D' },
-  D: { state: { x: PI, y: PI }, t: 1, next: 'E' },
-  E: { state: { x: PI, y: 0 }, t: 1, next: 'F' },
-  F: { state: { x: 0.1, y: 0 }, t: 1, next: 'A' }
+  A: {
+    state: { x: 0.1, y: 0 },
+    easing: { x: ease.sineOut, y: ease.sineOut },
+    t: 1,
+    next: 'B'
+  },
+  B: {
+    state: { x: PI, y: 0 },
+    easing: { x: ease.sineOut, y: ease.sineOut },
+    t: 1,
+    next: 'C'
+  },
+  C: {
+    state: { x: PI, y: PI },
+    easing: { x: ease.sineOut, y: ease.sineOut },
+    t: 1,
+    next: 'D'
+  },
+  D: {
+    state: { x: PI, y: PI },
+    easing: { x: ease.sineOut, y: ease.sineOut },
+    t: 1,
+    next: 'E'
+  },
+  E: {
+    state: { x: PI, y: 0 },
+    easing: { x: ease.sineOut, y: ease.sineOut },
+    t: 1,
+    next: 'F'
+  },
+  F: {
+    state: { x: 0.1, y: 0 },
+    easing: { x: ease.sineOut, y: ease.sineOut },
+    t: 1,
+    next: 'A'
+  }
 })
 
 function update (t) {
