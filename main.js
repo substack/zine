@@ -2,7 +2,7 @@ var regl = require('regl')({
   extensions: ['oes_standard_derivatives']
 })
 var camera = require('regl-camera')(regl, {
-  distance: 4, theta: -Math.PI/2, phi: 0.4,
+  distance: 4, theta: -Math.PI/2, phi: 0.2,
   center: [+0.0,+0.0,+0.0]
 })
 var mat4 = require('gl-mat4')
@@ -96,53 +96,67 @@ regl.frame(function (context) {
 
 var ease = require('eases')
 var PI = Math.PI
-var states = require('./states.js')('A', {
+var states = require('tween-machine')('A', {
   A: {
-    state: { x: 0.1, y: 0 },
+    state: { x: 0.1, y: 0, page: 0, offset: [-1.5,-0.25,0] },
     easing: { x: ease.sineOut, y: ease.sineOut },
     t: 1,
     next: 'B'
   },
   B: {
-    state: { x: PI, y: 0 },
+    state: { x: PI, y: 0, page: 0, offset: [-0.5,0,0] },
     easing: { x: ease.sineOut, y: ease.sineOut },
     t: 1,
     next: 'C'
   },
   C: {
-    state: { x: PI, y: PI },
+    state: { x: PI, y: PI, page: 0, offset: [0,0,0] },
     easing: { x: ease.sineOut, y: ease.sineOut },
     t: 1,
     next: 'D'
   },
   D: {
-    state: { x: PI, y: PI },
+    state: { x: PI, y: PI, page: 0, offset: [0,0,0] },
     easing: { x: ease.sineOut, y: ease.sineOut },
     t: 1,
     next: 'E'
   },
   E: {
-    state: { x: PI, y: 0 },
+    state: { x: PI, y: PI, page: 1, offset: [0,0,0] },
     easing: { x: ease.sineOut, y: ease.sineOut },
     t: 1,
     next: 'F'
   },
   F: {
-    state: { x: 0.1, y: 0 },
+    state: { x: PI, y: PI, page: 2, offset: [0,0,0] },
     easing: { x: ease.sineOut, y: ease.sineOut },
     t: 1,
     next: 'A'
-  }
+  },
+  /*
+  E: {
+    state: { x: PI, y: 0, offset: [-0.5,0,0] },
+    easing: { x: ease.sineOut, y: ease.sineOut },
+    t: 1,
+    next: 'F'
+  },
+  F: {
+    state: { x: 0.1, y: 0, offset: [-1.5,-0.25,0] },
+    easing: { x: ease.sineOut, y: ease.sineOut },
+    t: 1,
+    next: 'A'
+  },
+  */
 })
 
 function update (t) {
   paperProps.forEach(function (paper) {
     mat4.identity(paper.pose)
   })
-  var { x, y } = states.tick(t)
+  var { x, y, offset, page } = states.tick(t)
   var fudge = 0.01
   paperProps.forEach(function (paper) {
-    paper.offset[0] = (x + y)*0.25 - 1.5
+    vec3.copy(paper.offset, offset)
   })
 
   mat4.rotateY(pose.l1,pose.l1,x*0.5)
@@ -154,10 +168,21 @@ function update (t) {
   mat4.rotateX(pose.u0,pose.u0,x*(1-fudge*2))
   mat4.rotateX(pose.l0,pose.l0,-x*fudge)
 
-  mat4.rotateY(pose.l1,pose.l1,y*(0.5-fudge))
-  mat4.rotateY(pose.l3,pose.l3,y*(0.5-fudge))
+  mat4.rotateY(pose.l1,pose.l1,+y*(0.5-fudge))
+  mat4.rotateY(pose.l3,pose.l3,+y*(0.5-fudge))
   mat4.rotateY(pose.u1,pose.u1,-y*(1.5-fudge))
   mat4.rotateY(pose.u3,pose.u3,+y*(0.5-fudge))
+
+  mat4.rotateY(pose.l3,pose.l3,
+    -page*(PI-fudge)
+    +Math.max(0,page-1)*(PI-fudge)*2
+  )
+  mat4.rotateY(pose.u3,pose.u3,
+    +page*(PI-fudge)
+    -Math.max(0,page-1)*(PI-fudge)*2
+  )
+  mat4.rotateY(pose.l1,pose.l1,-Math.max(0,page-1)*(PI-fudge))
+  mat4.rotateY(pose.u1,pose.u1,+Math.max(0,page-1)*(PI-fudge))
 }
 
 function updateModels () {
