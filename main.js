@@ -2,7 +2,8 @@ var regl = require('regl')({
   extensions: ['oes_standard_derivatives']
 })
 var camera = require('regl-camera')(regl, {
-  distance: 8, theta: Math.PI/4, phi: 0.2
+  distance: 4, theta: -Math.PI/2, phi: 0.4,
+  center: [+0.0,+0.0,+0.0]
 })
 var mat4 = require('gl-mat4')
 var vec3 = require('gl-vec3')
@@ -75,12 +76,17 @@ var papers = {
   }
 }
 var paperProps = Object.values(papers)
+var pose = {}
+Object.keys(papers).forEach(function (key) {
+  pose[key] = papers[key].pose
+  papers[key].offset = [0,0,0]
+})
 
 var draw = {
   paper: paper(regl)
 }
 regl.frame(function (context) {
-  regl.clear({ color: [0.4,0.2,0.2,1], depth: true })
+  regl.clear({ color: [0.2,0.0,0.2,1], depth: true })
   camera(function () {
     draw.paper(paperProps)
   })
@@ -88,25 +94,39 @@ regl.frame(function (context) {
   updateModels()
 })
 
-var steps = [
-  { x: 0, y: 0, t: 1 },
-  { x: 1, y: 0, t: 1 },
-  { x: 1, y: 1, t: 1 }
-]
-var stepIndex = 0
+var PI = Math.PI
+var states = require('./states.js')('A', {
+  A: { state: { x: 0.1, y: 0 }, t: 1, next: 'B' },
+  B: { state: { x: PI, y: 0 }, t: 1, next: 'C' },
+  C: { state: { x: PI, y: PI }, t: 1, next: 'D' },
+  D: { state: { x: PI, y: PI }, t: 1, next: 'E' },
+  E: { state: { x: PI, y: 0 }, t: 1, next: 'F' },
+  F: { state: { x: 0.1, y: 0 }, t: 1, next: 'A' }
+})
 
 function update (t) {
   paperProps.forEach(function (paper) {
     mat4.identity(paper.pose)
   })
-  
-  mat4.rotateY(papers.l1.pose,papers.l1.pose,x*0.5)
-  mat4.rotateY(papers.l2.pose,papers.l2.pose,-x)
-  mat4.rotateY(papers.l3.pose,papers.l3.pose,x*0.5)
-  mat4.rotateY(papers.u1.pose,papers.u1.pose,x*0.5)
-  mat4.rotateY(papers.u2.pose,papers.u2.pose,-x)
-  mat4.rotateY(papers.u3.pose,papers.u3.pose,x*0.5)
-  mat4.rotateX(papers.u0.pose,papers.u0.pose,x)
+  var { x, y } = states.tick(t)
+  var fudge = 0.01
+  paperProps.forEach(function (paper) {
+    paper.offset[0] = (x + y)*0.25 - 1.5
+  })
+
+  mat4.rotateY(pose.l1,pose.l1,x*0.5)
+  mat4.rotateY(pose.l2,pose.l2,-x)
+  mat4.rotateY(pose.l3,pose.l3,x*0.5)
+  mat4.rotateY(pose.u1,pose.u1,x*0.5)
+  mat4.rotateY(pose.u2,pose.u2,-x)
+  mat4.rotateY(pose.u3,pose.u3,x*0.5)
+  mat4.rotateX(pose.u0,pose.u0,x*(1-fudge*2))
+  mat4.rotateX(pose.l0,pose.l0,-x*fudge)
+
+  mat4.rotateY(pose.l1,pose.l1,y*(0.5-fudge))
+  mat4.rotateY(pose.l3,pose.l3,y*(0.5-fudge))
+  mat4.rotateY(pose.u1,pose.u1,-y*(1.5-fudge))
+  mat4.rotateY(pose.u3,pose.u3,+y*(0.5-fudge))
 }
 
 function updateModels () {
@@ -138,16 +158,17 @@ function paper (regl) {
     vert: `
       precision highp float;
       uniform mat4 projection, view, model;
+      uniform vec3 offset;
       attribute vec2 position;
       varying vec3 vpos;
       void main () {
-        vpos = (model * vec4(position,0,1)).xyz;
-        gl_Position = projection * view * model
-          * vec4(position,0,1);
+        vpos = (model * vec4(position,0,1)).xyz + offset;
+        gl_Position = projection * view * vec4(vpos,1);
       }
     `,
     uniforms: {
-      model: regl.prop('model')
+      model: regl.prop('model'),
+      offset: regl.prop('offset')
     },
     attributes: {
       position: regl.prop('positions')
