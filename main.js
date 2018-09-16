@@ -1,4 +1,6 @@
-var regl = require('regl')()
+var regl = require('regl')({
+  extensions: ['oes_standard_derivatives']
+})
 var camera = require('regl-camera')(regl, {
   distance: 8, theta: Math.PI/4, phi: 0.2
 })
@@ -86,11 +88,18 @@ regl.frame(function (context) {
   updateModels()
 })
 
+var steps = [
+  { x: 0, y: 0, t: 1 },
+  { x: 1, y: 0, t: 1 },
+  { x: 1, y: 1, t: 1 }
+]
+var stepIndex = 0
+
 function update (t) {
   paperProps.forEach(function (paper) {
     mat4.identity(paper.pose)
   })
-  var x = (Math.sin(t)*0.5+0.5)*Math.PI
+  
   mat4.rotateY(papers.l1.pose,papers.l1.pose,x*0.5)
   mat4.rotateY(papers.l2.pose,papers.l2.pose,-x)
   mat4.rotateY(papers.l3.pose,papers.l3.pose,x*0.5)
@@ -119,15 +128,20 @@ function paper (regl) {
   return regl({
     frag: `
       precision highp float;
+      #extension GL_OES_standard_derivatives: enable
+      varying vec3 vpos;
       void main () {
-        gl_FragColor = vec4(0,1,1,1);
+        vec3 N = normalize(cross(dFdx(vpos),dFdy(vpos)));
+        gl_FragColor = vec4(N*0.5+0.5,1);
       }
     `,
     vert: `
       precision highp float;
       uniform mat4 projection, view, model;
       attribute vec2 position;
+      varying vec3 vpos;
       void main () {
+        vpos = (model * vec4(position,0,1)).xyz;
         gl_Position = projection * view * model
           * vec4(position,0,1);
       }
