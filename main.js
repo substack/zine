@@ -92,7 +92,7 @@ Object.keys(papers).forEach(function (key) {
 
 var ease = require('eases')
 var PI = Math.PI
-var tm = require('tween-machine')({
+var tm = require('./tm.js')({
   page0Flip: {
     state: { x: PI, y: PI, page: 0, offset: [0,0.35,-1.5], flip: PI },
     easing: { x: ease.sineOut, y: ease.sineOut }
