@@ -1,14 +1,29 @@
 var regl = require('regl')({
   extensions: ['oes_standard_derivatives']
 })
+var resl = require('resl')
 var camera = require('regl-camera')(regl, {
-  distance: 4, theta: -Math.PI/2, phi: 0.2,
+  distance: 1.5, theta: -Math.PI/2, phi: 0.0,
   center: [+0.0,+0.0,+0.0]
 })
 var mat4 = require('gl-mat4')
 var vec3 = require('gl-vec3')
 var tmpm = new Float32Array(16)
 var tmpv = new Float32Array(3)
+
+var zine = regl.texture()
+resl({
+  manifest: {
+    zine: {
+      type: 'image',
+      src: 'this-is-ikea.jpg'
+    }
+  },
+  onDone: function (assets) {
+    zine(assets.zine)
+    frame()
+  }
+})
 
 var papers = {
   p0: {
@@ -99,49 +114,54 @@ Object.keys(papers).forEach(function (key) {
   papers[key].offset = [0,0,0]
 })
 
-var ease = require('eases')
+var ease = {
+  sineIn: require('eases/sine-in.js'),
+  sineOut: require('eases/sine-out.js')
+}
 var PI = Math.PI
+var zNear = 0
+var zFar = +2.0
 var tm = require('./tm.js')({
   page0Flip: {
-    state: { x: PI, y: PI, page: 0, offset: [0,0.35,-1.5], flip: +PI },
+    state: { x: PI, y: PI, page: 0, offset: [+0.0,+0.0,zNear], flip: +PI },
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   page0: {
-    state: { x: PI, y: PI, page: 0, offset: [+0.0,0.35,-1.5], flip: 0 },
+    state: { x: PI, y: PI, page: 0, offset: [+0.0,+0.0,zNear], flip: 0 },
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   page1: {
-    state: { x: PI, y: PI, page: 1, offset: [-0.5,0.35,-1.5], flip: 0 },
+    state: { x: PI, y: PI, page: 1, offset: [-0.5,+0.0,zNear], flip: 0 },
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   page2: {
-    state: { x: PI, y: PI, page: 2, offset: [-0.5,0.35,-1.5], flip: 0 },
+    state: { x: PI, y: PI, page: 2, offset: [-0.5,+0.0,zNear], flip: 0 },
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   page3: {
-    state: { x: PI, y: PI, page: 3, offset: [-0.5,0.35,-1.5], flip: 0 },
+    state: { x: PI, y: PI, page: 3, offset: [-0.5,+0.0,zNear], flip: 0 },
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   page4: {
-    state: { x: PI, y: PI, page: 4, offset: [0,0.35,-1.5], flip: 0 },
+    state: { x: PI, y: PI, page: 4, offset: [+0.0,+0.0,zNear], flip: 0 },
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   page4Flip: {
-    state: { x: PI, y: PI, page: 4, offset: [0,0.35,-1.5], flip: -PI },
+    state: { x: PI, y: PI, page: 4, offset: [+0.0,+0.0,zNear], flip: -PI },
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   fold0: {
-    state: { x: PI, y: 0, page: 0, offset: [0,0,0], flip: 0 },
+    state: { x: PI, y: 0, page: 0, offset: [+0.0,+0.0,zFar], flip: 0 },
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   fold1: {
-    state: { x: 0, y: 0, page: 0, offset: [-1.5,-0.25,0], flip: 0 },
+    state: { x: 0, y: 0, page: 0, offset: [-1.5,-0.5,zFar], flip: 0 },
     easing: { x: ease.sineOut, y: ease.sineOut }
   }
 })
 
 var draw = {
-  paper: paper(regl)
+  paper: paper(regl, zine)
 }
 var speed = 0.35
 var state = { page: 0, folded: true }
@@ -161,9 +181,7 @@ window.addEventListener('keydown', function (ev) {
         speed,
         'fold0',
         speed,
-        'page4',
-        speed,
-        'page4Flip'
+        'page0'
       ])
       state.folded = true
     } else if (!state.folded) {
@@ -195,9 +213,7 @@ window.addEventListener('keydown', function (ev) {
         speed,
         'fold0',
         speed,
-        'page0',
-        speed,
-        'page0Flip'
+        'page4'
       ])
       state.folded = true
     } else if (!state.folded) {
@@ -229,7 +245,6 @@ window.addEventListener('keydown', function (ev) {
   } else if (ev.key === ' ' && !state.folded) {
     tm.go([ 'fold1', 0.5, 'fold0', 0.5, 'page' + state.page ])
     state.folded = true
-    state.page = 0
     frame()
   }
 })
@@ -255,12 +270,14 @@ function update (t) {
   var { x, y, offset, page, flip } = tm.tick(t)
   paperProps.forEach(function (paper) {
     vec3.copy(paper.offset, offset)
+    var z = 0
     if (paper.page < page*2) {
-      paper.offset[2] = -paper.page * x * 0.004
+      z = -paper.page * x * 0.004
     } else {
-      paper.offset[2] = (paper.page - page*3) * x * 0.004
+      z = (paper.page - page*3) * x * 0.004
     }
-    paper.offset[2] *= (Math.abs(flip) > PI*0.5 ? -1 : +1)
+    z *= (Math.abs(flip) > PI*0.5 ? -1 : +1)
+    paper.offset[2] += z
   })
 
   mat4.rotateY(pose.p5,pose.p5,+x*0.5)
@@ -320,16 +337,24 @@ function updateModels () {
   })
 }
 
-function paper (regl) {
+function paper (regl, texture) {
   return regl({
     frag: `
       precision highp float;
       #extension GL_OES_standard_derivatives: enable
-      uniform vec3 color;
-      varying vec3 vpos;
+      uniform float page;
+      uniform sampler2D texture;
+      varying vec2 vpos;
       void main () {
-        vec3 N = normalize(cross(dFdx(vpos),dFdy(vpos)));
-        gl_FragColor = vec4(color*0.5+vec3(0.5),1);
+        float pageOffset = 5.0;
+        float p = mod(page + pageOffset, 8.0);
+        float y = floor(p/4.0);
+        vec2 offset = vec2(
+          mix(1.0-(mod(p+1.0,4.01))/4.0,mod(p,4.0)/4.0,y),
+          y*0.5
+        );
+        vec2 uv = mod(vpos.xy+0.5,vec2(1))/vec2(4,2) + offset;
+        gl_FragColor = texture2D(texture,uv);
       }
     `,
     vert: `
@@ -337,16 +362,18 @@ function paper (regl) {
       uniform mat4 projection, view, model;
       uniform vec3 offset;
       attribute vec2 position;
-      varying vec3 vpos;
+      varying vec2 vpos;
       void main () {
-        vpos = (model * vec4(position,0,1)).xyz + offset;
-        gl_Position = projection * view * vec4(vpos,1);
+        vpos = position;
+        vec3 p = (model * vec4(position,0,1)).xyz + offset;
+        gl_Position = projection * view * vec4(p,1);
       }
     `,
     uniforms: {
-      color: regl.prop('color'),
+      page: regl.prop('page'),
       model: regl.prop('model'),
-      offset: regl.prop('offset')
+      offset: regl.prop('offset'),
+      texture: function () { return texture }
     },
     attributes: {
       position: regl.prop('positions')
