@@ -10,13 +10,147 @@ var mat4 = require('gl-mat4')
 var vec3 = require('gl-vec3')
 var tmpm = new Float32Array(16)
 var tmpv = new Float32Array(3)
+var PI = Math.PI
+
+var emitter = new(require('events').EventEmitter)()
+
+var fs = require('fs')
+var icons = (function () {
+  var div = document.createElement('svg')
+  div.innerHTML = fs.readFileSync(__dirname + '/icons.svg', 'utf8')
+  var root = div.children[0]
+  root.style.display = 'none'
+  document.body.appendChild(root)
+  return {
+    element: root,
+    get: function (name) {
+      var elem = root.querySelector('#'+name).cloneNode(true)
+      var svg = document.createElementNS('http://www.w3.org/2000/svg','svg')
+      svg.appendChild(elem)
+      return svg
+    }
+  }
+})()
+
+;(function () {
+  document.body.style.margin = '0px'
+  document.body.style.overflow = 'hidden'
+
+  var left = icons.get('left')
+  left.style.position = 'absolute'
+  left.style.left = '5px'
+  left.style.bottom = '15px'
+  left.style.zIndex = 100
+  left.style.opacity = 0.2
+  var lpath = left.querySelector('path')
+  lpath.addEventListener('mouseover', function () {
+    left.style.opacity = 0.8
+  })
+  lpath.addEventListener('mouseout', function () {
+    left.style.opacity = 0.2
+  })
+  lpath.addEventListener('click', function () {
+    emitter.emit('page:prev')
+  })
+  document.body.appendChild(left)
+
+  var right = icons.get('right')
+  right.style.position = 'absolute'
+  right.style.right = '-125px'
+  right.style.bottom = '15px'
+  right.style.zIndex = 100
+  right.style.opacity = 0.2
+  var rpath = right.querySelector('path')
+  rpath.addEventListener('mouseover', function () {
+    right.style.opacity = 0.8
+  })
+  rpath.addEventListener('mouseout', function () {
+    right.style.opacity = 0.2
+  })
+  rpath.addEventListener('click', function () {
+    emitter.emit('page:next')
+  })
+  document.body.appendChild(right)
+
+  var fold = icons.get('fold')
+  fold.style.position = 'absolute'
+  fold.style.right = '5px'
+  fold.style.top = '-45px'
+  fold.style.zIndex = 100
+  fold.style.opacity = 0.2
+  var fg = fold.querySelector('g')
+  fg.addEventListener('mouseover', function () {
+    fold.style.opacity = 0.8
+  })
+  fg.addEventListener('mouseout', function () {
+    fold.style.opacity = 0.2
+  })
+  fg.addEventListener('click', function () {
+    emitter.emit('fold:toggle')
+  })
+  document.body.appendChild(fold)
+})()
+
+var state = {
+  page: 0,
+  folded: true,
+  speed: 0.35,
+  zoom: 1.5,
+  pan: [0,0,0],
+  prevMouse: [-1,-1]
+}
+
+window.addEventListener('mousedown', frame)
+window.addEventListener('mouseup', frame)
+window.addEventListener('mousemove', function (ev) {
+  if ((ev.buttons&1) && state.prevMouse[0] >= 0) {
+    var dx = state.prevMouse[0] - ev.clientX
+    var dy = state.prevMouse[1] - ev.clientY
+    state.pan[0] -= dx*0.00175*state.zoom
+    state.pan[1] -= dy*0.00175*state.zoom
+    frame()
+  }
+  state.prevMouse[0] = ev.clientX
+  state.prevMouse[1] = ev.clientY
+})
+window.addEventListener('wheel', function (ev) {
+  state.zoom = clamp(0.25,1.5,state.zoom + ev.deltaY*0.001)
+  frame()
+})
+
+var camera = (function () {
+  var projection = new Float32Array(16)
+  var view = new Float32Array(16)
+  var eye = [0,0,-1.5]
+  var center = [0,0,0]
+  var up = [0,1,0]
+  return regl({
+    uniforms: {
+      projection: function (context, props) {
+        var aspect = context.viewportWidth / context.viewportHeight
+        return mat4.perspective(projection,
+          Math.PI/4, aspect, 0.1, 1000.0
+        )
+      },
+      view: function (context, props) {
+        center[0] = state.pan[0]
+        center[1] = state.pan[1]
+        eye[0] = state.pan[0]
+        eye[1] = state.pan[1]
+        eye[2] = -state.zoom * Math.max(1.0,
+          Math.atan2(context.viewportHeight, context.viewportWidth)*PI)
+        return mat4.lookAt(view, eye, center, up)
+      }
+    }
+  })
+})()
 
 var zine = regl.texture()
 resl({
   manifest: {
     zine: {
       type: 'image',
-      src: 'this-is-ikea.jpg'
+      src: 'luxury.jpg'
     }
   },
   onDone: function (assets) {
@@ -114,11 +248,20 @@ Object.keys(papers).forEach(function (key) {
   papers[key].offset = [0,0,0]
 })
 
+var pageOffset = 7
+var flips = {
+  5: [+1,+1,+1,+1,+1,+1,+1,+1],
+  7: [+1,-1,-1,+1,+1,-1,-1,+1]
+}
+paperProps.forEach(function (paper) {
+  paper.pageFlip = flips[pageOffset][paper.page]
+  paper.pageOffset = pageOffset
+})
+
 var ease = {
   sineIn: require('eases/sine-in.js'),
   sineOut: require('eases/sine-out.js')
 }
-var PI = Math.PI
 var zNear = 0
 var zFar = +2.0
 var tm = require('./tm.js')({
@@ -163,89 +306,106 @@ var tm = require('./tm.js')({
 var draw = {
   paper: paper(regl, zine)
 }
-var speed = 0.35
-var state = { page: 0, folded: true }
+
 tm.go([ 'page0' ])
 frame()
 
-window.addEventListener('mousedown', frame)
-window.addEventListener('mouseup', frame)
-window.addEventListener('mousemove', frame)
-window.addEventListener('wheel', frame)
+emitter.on('page:next', function () {
+  var sp = state.speed
+  if (!state.folded && state.page === 4) {
+    tm.go([
+      'fold1',
+      sp,
+      'fold0',
+      sp,
+      'page0'
+    ])
+    state.folded = true
+  } else if (!state.folded) {
+    tm.go([
+      'fold1',
+      sp,
+      'fold0',
+      sp,
+      'page' + state.page,
+      sp,
+      'page' + String((state.page+1)%5)
+    ])
+    state.folded = true
+  } else if (state.page === 4) {
+    tm.go([ 'page4', sp, 'page4Flip' ])
+  } else {
+    tm.go([
+      'page' + state.page,
+      sp,
+      'page' + String((state.page+1)%5)
+    ])
+  }
+  state.page = (state.page+1)%5
+  frame()
+})
+
+emitter.on('page:prev', function () {
+  var sp = state.speed
+  if (!state.folded && state.page === 0) {
+    tm.go([
+      'fold1',
+      sp,
+      'fold0',
+      sp,
+      'page4'
+    ])
+    state.folded = true
+  } else if (!state.folded) {
+    tm.go([
+      'fold1',
+      sp,
+      'fold0',
+      sp,
+      'page' + state.page,
+      sp,
+      'page' + String((state.page+4)%5)
+    ])
+    state.folded = true
+  } else if (state.page === 0) {
+    tm.go([ 'page0', sp, 'page0Flip' ])
+  } else {
+    tm.go([
+      'page' + state.page,
+      sp,
+      'page' + String((state.page+4)%5)
+    ])
+  }
+  state.page = (state.page+4)%5
+  frame()
+})
+
+emitter.on('fold:toggle', function () {
+  if (state.folded) emitter.emit('fold:unfold')
+  else emitter.emit('fold:fold')
+})
+
+emitter.on('fold:unfold', function () {
+  var sp = state.speed
+  tm.go([ 'page' + state.page, sp, 'fold0', sp, 'fold1' ])
+  state.folded = false
+  frame()
+})
+
+emitter.on('fold:fold', function () {
+  var sp = state.speed
+  tm.go([ 'fold1', sp, 'fold0', sp, 'page' + state.page ])
+  state.folded = true
+  frame()
+})
 
 window.addEventListener('keydown', function (ev) {
   if (ev.key === 'ArrowRight') {
-    if (!state.folded && state.page === 4) {
-      tm.go([
-        'fold1',
-        speed,
-        'fold0',
-        speed,
-        'page0'
-      ])
-      state.folded = true
-    } else if (!state.folded) {
-      tm.go([
-        'fold1',
-        speed,
-        'fold0',
-        speed,
-        'page' + state.page,
-        speed,
-        'page' + String((state.page+1)%5)
-      ])
-      state.folded = true
-    } else if (state.page === 4) {
-      tm.go([ 'page4', speed, 'page4Flip' ])
-    } else {
-      tm.go([
-        'page' + state.page,
-        speed,
-        'page' + String((state.page+1)%5)
-      ])
-    }
-    state.page = (state.page+1)%5
-    frame()
+    emitter.emit('page:next')
   } else if (ev.key === 'ArrowLeft') {
-    if (!state.folded && state.page === 0) {
-      tm.go([
-        'fold1',
-        speed,
-        'fold0',
-        speed,
-        'page4'
-      ])
-      state.folded = true
-    } else if (!state.folded) {
-      tm.go([
-        'fold1',
-        speed,
-        'fold0',
-        speed,
-        'page' + state.page,
-        speed,
-        'page' + String((state.page+4)%5)
-      ])
-      state.folded = true
-    } else if (state.page === 0) {
-      tm.go([ 'page0', speed, 'page0Flip' ])
-    } else {
-      tm.go([
-        'page' + state.page,
-        speed,
-        'page' + String((state.page+4)%5)
-      ])
-    }
-    state.page = (state.page+4)%5
-    frame()
-  } else if (ev.key === ' ' && state.folded) {
-    tm.go([ 'page' + state.page, 0.5, 'fold0', 0.5, 'fold1' ])
-    state.folded = false
-    frame()
-  } else if (ev.key === ' ' && !state.folded) {
-    tm.go([ 'fold1', 0.5, 'fold0', 0.5, 'page' + state.page ])
-    state.folded = true
-    frame()
+    emitter.emit('page:prev')
+  } else if (ev.key === ' ') {
+    emitter.emit('fold:toggle')
   }
 })
 
@@ -342,18 +502,17 @@ function paper (regl, texture) {
     frag: `
       precision highp float;
       #extension GL_OES_standard_derivatives: enable
-      uniform float page;
+      uniform float page, pageOffset, pageFlip;
       uniform sampler2D texture;
       varying vec2 vpos;
       void main () {
-        float pageOffset = 5.0;
         float p = mod(page + pageOffset, 8.0);
         float y = floor(p/4.0);
         vec2 offset = vec2(
           mix(1.0-(mod(p+1.0,4.01))/4.0,mod(p,4.0)/4.0,y),
           y*0.5
         );
-        vec2 uv = mod(vpos.xy+0.5,vec2(1))/vec2(4,2) + offset;
+        vec2 uv = mod(vpos.xy*vec2(pageFlip)+0.5,vec2(1))/vec2(4,2) + offset;
         gl_FragColor = texture2D(texture,uv);
       }
     `,
@@ -370,6 +529,8 @@ function paper (regl, texture) {
       }
     `,
     uniforms: {
+      pageOffset: regl.prop('pageOffset'),
+      pageFlip: regl.prop('pageFlip'),
       page: regl.prop('page'),
       model: regl.prop('model'),
       offset: regl.prop('offset'),
