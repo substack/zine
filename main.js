@@ -135,7 +135,7 @@ var tm = require('./tm.js')({
     easing: { x: ease.sineOut, y: ease.sineOut }
   },
   fold1: {
-    state: { x: 0.1, y: 0, page: 0, offset: [-1.5,-0.25,0], flip: 0 },
+    state: { x: 0, y: 0, page: 0, offset: [-1.5,-0.25,0], flip: 0 },
     easing: { x: ease.sineOut, y: ease.sineOut }
   }
 })
@@ -255,9 +255,12 @@ function update (t) {
   var { x, y, offset, page, flip } = tm.tick(t)
   paperProps.forEach(function (paper) {
     vec3.copy(paper.offset, offset)
-    paper.offset[2] = paper.page * x * 0.004
-      * (paper.page < page*2 ? -1 : +1)
-      * (Math.abs(flip) > PI*0.5 ? -1 : +1)
+    if (paper.page < page*2) {
+      paper.offset[2] = -paper.page * x * 0.004
+    } else {
+      paper.offset[2] = (paper.page - page*3) * x * 0.004
+    }
+    paper.offset[2] *= (Math.abs(flip) > PI*0.5 ? -1 : +1)
   })
 
   mat4.rotateY(pose.p5,pose.p5,+x*0.5)
@@ -293,31 +296,6 @@ function update (t) {
     -smstep(3,4,page)*PI
     + flip
   )
-
-  /*
-  mat4.rotateY(pose.p3,pose.p3,
-    -page*PI
-    +Math.max(0,page-1)*PI*2
-    -Math.max(0,page-2)*PI
-  )
-  mat4.rotateY(pose.p2,pose.p2,
-    +page*PI
-    -Math.max(0,page-1)*PI*2
-    +Math.max(0,page-2)*PI
-  )
-  mat4.rotateY(pose.p5,pose.p5,
-    -Math.max(0,page-1)*PI
-    +Math.max(0,page-2)*PI*2
-  )
-  mat4.rotateY(pose.p0,pose.p0,
-    +Math.max(0,page-1)*PI
-    -Math.max(0,page-2)*PI*2
-  )
-  mat4.rotateY(pose.p6,pose.p6,
-    -Math.max(0,page-2)*PI
-    + flip
-  )
-  */
 }
 
 function smstep (a, b, x) {
