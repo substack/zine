@@ -19,15 +19,28 @@ var icons = (function () {
   var div = document.createElement('svg')
   div.innerHTML = fs.readFileSync(__dirname + '/icons.svg', 'utf8')
   var root = div.children[0]
-  root.style.display = 'none'
+  root.style.position = 'absolute'
+  root.style.top = '0px'
+  root.style.left = '0px'
+  root.style.visibility = 'hidden'
   document.body.appendChild(root)
   return {
     element: root,
     get: function (name) {
-      var elem = root.querySelector('#'+name).cloneNode(true)
+      var elem = root.querySelector('#'+name)
+      var copy = elem.cloneNode(true)
       var svg = document.createElementNS('http://www.w3.org/2000/svg','svg')
-      svg.appendChild(elem)
+      var g = document.createElementNS('http://www.w3.org/2000/svg','g')
+      var bbox = elem.getBoundingClientRect()
+      svg.setAttribute('width', bbox.width)
+      svg.setAttribute('height', bbox.height)
+      g.setAttribute('transform',
+        'translate('+(-bbox.left)+','+(-bbox.top)+')')
+      svg.appendChild(g)
+      g.appendChild(copy)
       return svg
+      function set () {
+      }
     }
   }
 })()
@@ -38,7 +51,7 @@ var icons = (function () {
 
   var left = icons.get('left')
   left.style.position = 'absolute'
-  left.style.left = '5px'
+  left.style.left = '15px'
   left.style.bottom = '15px'
   left.style.zIndex = 100
   left.style.opacity = 0.2
@@ -56,7 +69,7 @@ var icons = (function () {
 
   var right = icons.get('right')
   right.style.position = 'absolute'
-  right.style.right = '-125px'
+  right.style.right = '15px'
   right.style.bottom = '15px'
   right.style.zIndex = 100
   right.style.opacity = 0.2
@@ -74,8 +87,8 @@ var icons = (function () {
 
   var fold = icons.get('fold')
   fold.style.position = 'absolute'
-  fold.style.right = '5px'
-  fold.style.top = '-45px'
+  fold.style.right = '15px'
+  fold.style.top = '15px'
   fold.style.zIndex = 100
   fold.style.opacity = 0.2
   var fg = fold.querySelector('g')
@@ -89,6 +102,26 @@ var icons = (function () {
     emitter.emit('fold:toggle')
   })
   document.body.appendChild(fold)
+
+  /*
+  var grid = icons.get('grid')
+  grid.style.position = 'absolute'
+  grid.style.right = '20px'
+  grid.style.top = '90px'
+  grid.style.zIndex = 100
+  grid.style.opacity = 0.2
+  var gg = grid.querySelector('g')
+  gg.addEventListener('mouseover', function () {
+    grid.style.opacity = 0.8
+  })
+  gg.addEventListener('mouseout', function () {
+    grid.style.opacity = 0.2
+  })
+  gg.addEventListener('click', function () {
+    emitter.emit('grid:toggle')
+  })
+  document.body.appendChild(grid)
+  */
 })()
 
 var state = {
@@ -144,20 +177,6 @@ var camera = (function () {
     }
   })
 })()
-
-var zine = regl.texture()
-resl({
-  manifest: {
-    zine: {
-      type: 'image',
-      src: 'luxury.jpg'
-    }
-  },
-  onDone: function (assets) {
-    zine(assets.zine)
-    frame()
-  }
-})
 
 var papers = {
   p0: {
@@ -248,7 +267,26 @@ Object.keys(papers).forEach(function (key) {
   papers[key].offset = [0,0,0]
 })
 
-var pageOffset = 7
+var fileOffsets = {
+  'this-is-ikea.jpg': 5,
+  'luxury.jpg': 7,
+  'meet-death.jpg': 5,
+  'exercise-exactly-4-minutes-per-day.jpg': 5
+}
+var file = 'meet-death.jpg'
+var pageOffset = fileOffsets[file]
+var zine = regl.texture()
+
+resl({
+  manifest: {
+    zine: { type: 'image', src: file }
+  },
+  onDone: function (assets) {
+    zine(assets.zine)
+    frame()
+  }
+})
+
 var flips = {
   5: [+1,+1,+1,+1,+1,+1,+1,+1],
   7: [+1,-1,-1,+1,+1,-1,-1,+1]
@@ -422,7 +460,6 @@ function frame () {
   if (!tm.stopped) window.requestAnimationFrame(frame)
 }
 
-
 function update (t) {
   paperProps.forEach(function (paper) {
     mat4.identity(paper.pose)
@@ -525,7 +562,7 @@ function paper (regl, texture) {
       void main () {
         vpos = position;
         vec3 p = (model * vec4(position,0,1)).xyz + offset;
-        gl_Position = projection * view * vec4(p,1);
+        gl_Position = projection * view * vec4(p*vec3(1,1.3,1),1);
       }
     `,
     uniforms: {
