@@ -16,7 +16,7 @@ var emitter = new(require('events').EventEmitter)()
 
 var fs = require('fs')
 var icons = (function () {
-  var div = document.createElement('svg')
+  var div = document.createElement('div')
   div.innerHTML = fs.readFileSync(__dirname + '/icons.svg', 'utf8')
   var root = div.children[0]
   root.style.position = 'absolute'
@@ -39,8 +39,6 @@ var icons = (function () {
       svg.appendChild(g)
       g.appendChild(copy)
       return svg
-      function set () {
-      }
     }
   }
 })()
@@ -273,7 +271,7 @@ var fileOffsets = {
   'meet-death.jpg': 5,
   'exercise-exactly-4-minutes-per-day.jpg': 5
 }
-var file = 'meet-death.jpg'
+var file = 'exercise-exactly-4-minutes-per-day.jpg'
 var pageOffset = fileOffsets[file]
 var zine = regl.texture()
 
